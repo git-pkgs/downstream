@@ -74,6 +74,14 @@ func Test(ctx context.Context, opts Options) (*Result, error) {
 		Manager:       mgr.Name(),
 	}
 
+	// Install dependencies before the baseline run. Go would auto-fetch
+	// on `go test` but other ecosystems need this explicit, and for Go
+	// it pre-warms the module cache before go list in autoNarrow.
+	// Failures are logged and the run continues so the baseline test
+	// surfaces the actual breakage as broken-baseline rather than a
+	// setup error.
+	install(ctx, mgr, opts, "after clone")
+
 	if opts.TestCmd == "" {
 		opts.TestCmd, result.Narrowed = autoNarrow(ctx, dependentPath, opts)
 	}
@@ -85,9 +93,16 @@ func Test(ctx context.Context, opts Options) (*Result, error) {
 	if _, err := mgr.Replace(ctx, opts.Module, managers.ReplaceOptions{Path: upstreamPath}); err != nil {
 		return nil, fmt.Errorf("replace: %w", err)
 	}
-	if err := tidy(ctx, dependentPath); err != nil {
-		return nil, fmt.Errorf("go mod tidy after replace: %w", err)
+	if mgr.Name() == "gomod" {
+		if err := tidy(ctx, dependentPath); err != nil {
+			return nil, fmt.Errorf("go mod tidy after replace: %w", err)
+		}
 	}
+	// Re-resolve after the override. For Go this is cheap (everything
+	// cached); for cargo/uv/bundler it's required since Replace only
+	// edits the manifest; for npm-family Replace already ran install
+	// so this is a no-op resolve.
+	install(ctx, mgr, opts, "after replace")
 
 	logf(opts, "running tests with replacement")
 	result.Patched = runTests(ctx, dependentPath, opts)
@@ -171,6 +186,18 @@ func detectManager(dir string) (managers.Manager, error) { //nolint:ireturn
 		det.Register(def)
 	}
 	return det.Detect(dir, managers.DetectOptions{})
+}
+
+func install(ctx context.Context, mgr managers.Manager, opts Options, stage string) {
+	logf(opts, "installing dependencies (%s)", stage)
+	r, err := mgr.Install(ctx, managers.InstallOptions{})
+	if err != nil {
+		logf(opts, "install %s failed: %v; continuing", stage, err)
+		return
+	}
+	if r != nil && r.ExitCode != 0 {
+		logf(opts, "install %s exited %d; continuing\n%s", stage, r.ExitCode, strings.TrimSpace(r.Stderr))
+	}
 }
 
 // autoNarrow computes a narrowed test command for the dependent if
