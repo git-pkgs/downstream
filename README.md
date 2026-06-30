@@ -90,6 +90,13 @@ on:
   pull_request:
     types: [labeled]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   load:
     if: github.event_name != 'pull_request' || github.event.label.name == 'test-downstream'
@@ -98,6 +105,7 @@ jobs:
       dependents: ${{ steps.load.outputs.dependents }}
     steps:
       - uses: actions/checkout@v5
+        with: {persist-credentials: false}
       - uses: actions/setup-go@v6
         with: {go-version: stable}
       - run: go install github.com/git-pkgs/downstream@latest
@@ -113,15 +121,18 @@ jobs:
         dependent: ${{ fromJson(needs.load.outputs.dependents) }}
     steps:
       - uses: actions/checkout@v5
-        with: {path: upstream}
+        with: {path: upstream, persist-credentials: false}
       - uses: actions/setup-go@v6
         with: {go-version: stable}
       - run: go install github.com/git-pkgs/downstream@latest
-      - run: |
+      - env:
+          DEP_REPO: ${{ matrix.dependent.repo }}
+          DEP_TEST: ${{ matrix.dependent.test }}
+        run: |
           downstream test \
             --upstream-path ./upstream \
-            --dependent "${{ matrix.dependent.repo }}" \
-            --test "${{ matrix.dependent.test }}" \
+            --dependent "$DEP_REPO" \
+            --test "$DEP_TEST" \
             >> "$GITHUB_STEP_SUMMARY"
 ```
 
