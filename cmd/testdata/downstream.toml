@@ -1,0 +1,15 @@
+[package]
+name = "github.com/spf13/cobra"
+ecosystem = "go"
+
+[[dependents]]
+name = "github.com/cli/cli"
+repo = "https://github.com/cli/cli"
+ref = "v2.40.0"
+test = "go test ./pkg/..."
+source = "discover"
+
+[[dependents]]
+name = "github.com/gohugoio/hugo"
+repo = "https://github.com/gohugoio/hugo"
+source = "manual"
