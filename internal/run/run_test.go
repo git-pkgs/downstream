@@ -63,22 +63,21 @@ func TestRunFailed(t *testing.T) {
 	}
 }
 
-func TestRunRejectsNonGoDependent(t *testing.T) {
+func TestRunRejectsManagerWithoutReplacePath(t *testing.T) {
 	workdir := t.TempDir()
-	npmDep := filepath.Join(workdir, "src")
-	mustMkdir(t, npmDep)
-	mustWrite(t, filepath.Join(npmDep, "package.json"), `{"name":"dep"}`)
-	mustWrite(t, filepath.Join(npmDep, "package-lock.json"), `{}`)
+	pipDep := filepath.Join(workdir, "src")
+	mustMkdir(t, pipDep)
+	mustWrite(t, filepath.Join(pipDep, "requirements.txt"), "requests==2.0\n")
 
 	_, err := Test(context.Background(), Options{
 		Module:       "example.test/upstream",
 		UpstreamPath: fixturePath(t, "upstream"),
-		Dependent:    npmDep,
+		Dependent:    pipDep,
 		Workdir:      workdir,
 		Stderr:       io.Discard,
 	})
-	if err == nil || !strings.Contains(err.Error(), "only Go modules") {
-		t.Fatalf("error = %v, want only-Go-modules error", err)
+	if err == nil || !strings.Contains(err.Error(), "does not support path replacement") {
+		t.Fatalf("error = %v, want replace-not-supported error", err)
 	}
 }
 

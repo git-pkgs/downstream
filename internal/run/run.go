@@ -15,6 +15,8 @@ import (
 	"github.com/git-pkgs/managers/definitions"
 )
 
+const managerGo = "gomod"
+
 type Options struct {
 	Module       string        // upstream module path, e.g. github.com/spf13/cobra
 	UpstreamRef  string        // git ref to clone the upstream at; ignored if UpstreamPath is set
@@ -58,8 +60,8 @@ func Test(ctx context.Context, opts Options) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("detecting package manager in %s: %w", dependentPath, err)
 	}
-	if mgr.Name() != "gomod" {
-		return nil, fmt.Errorf("only Go modules are supported (found %s)", mgr.Name())
+	if !mgr.Supports(managers.CapReplacePath) {
+		return nil, fmt.Errorf("manager %s does not support path replacement", mgr.Name())
 	}
 
 	name := opts.Name
@@ -82,9 +84,8 @@ func Test(ctx context.Context, opts Options) (*Result, error) {
 	// setup error.
 	install(ctx, mgr, opts, "after clone")
 
-	if opts.TestCmd == "" {
-		opts.TestCmd, result.Narrowed = autoNarrow(ctx, dependentPath, opts)
-	}
+	opts.TestCmd, result.Narrowed = resolveTestCommand(ctx, dependentPath, mgr.Name(), opts)
+	logf(opts, "test command: %s", opts.TestCmd)
 
 	logf(opts, "running baseline tests in %s", dependentPath)
 	result.Baseline = runTests(ctx, dependentPath, opts)
@@ -93,7 +94,7 @@ func Test(ctx context.Context, opts Options) (*Result, error) {
 	if _, err := mgr.Replace(ctx, opts.Module, managers.ReplaceOptions{Path: upstreamPath}); err != nil {
 		return nil, fmt.Errorf("replace: %w", err)
 	}
-	if mgr.Name() == "gomod" {
+	if mgr.Name() == managerGo {
 		if err := tidy(ctx, dependentPath); err != nil {
 			return nil, fmt.Errorf("go mod tidy after replace: %w", err)
 		}
@@ -200,22 +201,70 @@ func install(ctx context.Context, mgr managers.Manager, opts Options, stage stri
 	}
 }
 
-// autoNarrow computes a narrowed test command for the dependent if
-// one isn't already set. Returns the command string and the count of
-// packages it was narrowed to; on any error, falls back to ./... and
-// returns 0 so the run isn't blocked by a flaky go list.
-func autoNarrow(ctx context.Context, dir string, opts Options) (string, int) {
-	pkgs, err := narrowGoTest(ctx, dir, opts.Module)
-	if err != nil {
-		logf(opts, "auto-narrow failed (%v); using ./...", err)
-		return "", 0
+// resolveTestCommand decides what to run for both baseline and
+// patched. Precedence:
+//
+//  1. User-supplied TestCmd (flag or downstream.toml) wins.
+//  2. brief CLI in the dependent: if it reports a project-defined
+//     test script (Makefile target, package.json script) use that
+//     as-is since it may carry flags or setup auto-narrowing would
+//     bypass.
+//  3. For Go, auto-narrow to packages whose imports reach the
+//     upstream module.
+//  4. brief's generic command if any; otherwise the per-ecosystem
+//     fallback.
+//
+// Returns the command and the auto-narrow package count (0 if not
+// narrowed).
+func resolveTestCommand(ctx context.Context, dir, manager string, opts Options) (string, int) {
+	if opts.TestCmd != "" {
+		return opts.TestCmd, 0
 	}
-	if len(pkgs) == 0 {
-		logf(opts, "no packages in dependent import %s; using ./...", opts.Module)
-		return "", 0
+
+	detected, fromProject := briefDetect(ctx, dir)
+	if detected != "" {
+		logf(opts, "brief detected test command %q (project-script=%v)", detected, fromProject)
 	}
-	logf(opts, "narrowed to %d package(s) importing %s", len(pkgs), opts.Module)
-	return "go test " + strings.Join(pkgs, " "), len(pkgs)
+	if fromProject {
+		return detected, 0
+	}
+
+	if manager == managerGo {
+		if pkgs, err := narrowGoTest(ctx, dir, opts.Module); err == nil && len(pkgs) > 0 {
+			logf(opts, "narrowed to %d package(s) importing %s", len(pkgs), opts.Module)
+			return "go test " + strings.Join(pkgs, " "), len(pkgs)
+		}
+	}
+
+	if detected != "" {
+		return detected, 0
+	}
+	return fallbackTestCommand(manager), 0
+}
+
+func fallbackTestCommand(manager string) string {
+	switch manager {
+	case managerGo:
+		return "go test ./..."
+	case "cargo":
+		return "cargo test"
+	case "npm":
+		return "npm test"
+	case "pnpm":
+		return "pnpm test"
+	case "yarn":
+		return "yarn test"
+	case "bun":
+		return "bun test"
+	case "bundler":
+		return "bundle exec rake test"
+	case "uv":
+		return "uv run pytest"
+	case "composer":
+		return "composer test"
+	default:
+		return ""
+	}
 }
 
 func logf(opts Options, format string, args ...any) {
