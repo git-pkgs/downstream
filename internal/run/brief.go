@@ -31,7 +31,10 @@ func extractBriefTest(b briefOutput) (cmd string, fromProject bool) {
 		if t.Command.Run == "" {
 			continue
 		}
-		return t.Command.Run, t.Command.Source == "project_script"
+		// brief defines project_script, knowledge_base, config_file;
+		// only knowledge_base is a generic per-language default that
+		// it's safe to replace with auto-narrowing.
+		return t.Command.Run, t.Command.Source != "knowledge_base"
 	}
 	for _, s := range b.Scripts {
 		if s.Name == "test" && s.Run != "" {
