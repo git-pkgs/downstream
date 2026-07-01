@@ -4,12 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/git-pkgs/downstream/internal/config"
 	"github.com/git-pkgs/downstream/internal/discover"
+	"github.com/git-pkgs/manifests"
 	"github.com/spf13/cobra"
-	"golang.org/x/mod/modfile"
 )
 
 func addDiscoverCmd(parent *cobra.Command) {
@@ -32,22 +33,29 @@ func addDiscoverCmd(parent *cobra.Command) {
 		Long: `Queries packages.ecosyste.ms for the most-used packages that depend on
 the given module, drops forks/archived/stale repos, then shallow-clones
 the survivors and scores them on test count and how many of their files
-import the module. The ranked top N is reconciled with any existing
+reference the package. The ranked top N is reconciled with any existing
 downstream.toml: manual entries and per-dependent overrides are kept,
 discovered entries are rescored, and new candidates are appended.
 
-If --package is omitted and a go.mod is present, the module path is
-read from there.`,
+If --package is omitted, the package name and ecosystem are read from
+the manifest in the current directory (go.mod, Cargo.toml, package.json,
+etc.).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			out, errw := cmd.OutOrStdout(), cmd.ErrOrStderr()
 			ctx := cmd.Context()
 
 			if pkg == "" {
-				p, err := readGoModule()
+				p, eco, err := readLocalPackage(".")
 				if err != nil {
-					return errors.New("--package is required (no go.mod found in current directory)")
+					return fmt.Errorf("--package is required (%w)", err)
 				}
 				pkg = p
+				if ecosystem == "" {
+					ecosystem = eco
+				}
+			}
+			if ecosystem == "" {
+				ecosystem = "go"
 			}
 
 			log := func(format string, a ...any) { _, _ = fmt.Fprintf(errw, "discover: "+format+"\n", a...) }
@@ -103,8 +111,8 @@ read from there.`,
 		},
 	}
 
-	c.Flags().StringVar(&pkg, "package", "", "Package/module to discover dependents for (default: module from ./go.mod)")
-	c.Flags().StringVarP(&ecosystem, "ecosystem", "e", "go", "Ecosystem (go, npm, rubygems, pypi, cargo, packagist)")
+	c.Flags().StringVar(&pkg, "package", "", "Package to discover dependents for (default: read from local manifest)")
+	c.Flags().StringVarP(&ecosystem, "ecosystem", "e", "", "Ecosystem (go, npm, rubygems, pypi, cargo, packagist; default: from local manifest)")
 	c.Flags().IntVarP(&limit, "limit", "n", defaultDiscoverLimit, "Number of dependents to keep")
 	c.Flags().IntVar(&pool, "pool", 0, "Candidates to fetch before filtering (default limit*6)")
 	c.Flags().DurationVar(&maxAge, "max-age", 0, "Drop repos with no push in this window (default 2y)")
@@ -126,17 +134,35 @@ const (
 // server instead of the live ecosyste.ms API.
 var newDiscoverClient = discover.NewClient
 
-func readGoModule() (string, error) {
-	data, err := os.ReadFile("go.mod")
+// readLocalPackage finds the first manifest in dir that declares a
+// package name and returns that name and its ecosystem. Used to
+// default --package/--ecosystem when running from a project root.
+func readLocalPackage(dir string) (name, ecosystem string, err error) {
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	mf, err := modfile.ParseLax("go.mod", data, nil)
-	if err != nil {
-		return "", err
+	var found []string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if _, kind, ok := manifests.Identify(e.Name()); !ok || kind != manifests.Manifest {
+			continue
+		}
+		found = append(found, e.Name())
+		content, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue
+		}
+		r, err := manifests.Parse(e.Name(), content)
+		if err != nil || r.Name == "" {
+			continue
+		}
+		return r.Name, r.Ecosystem, nil
 	}
-	if mf.Module == nil {
-		return "", errors.New("go.mod has no module directive")
+	if len(found) == 0 {
+		return "", "", fmt.Errorf("no manifest found in %s", dir)
 	}
-	return mf.Module.Mod.Path, nil
+	return "", "", fmt.Errorf("no package name in %v", found)
 }

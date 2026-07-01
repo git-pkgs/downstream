@@ -53,6 +53,7 @@ var registryByEcosystem = map[string]string{
 	"pypi":      "pypi.org",
 	"cargo":     "crates.io",
 	"packagist": "packagist.org",
+	"composer":  "packagist.org",
 }
 
 // Sort key per ecosystem. Go has no download counts so popularity is

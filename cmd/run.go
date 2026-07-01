@@ -58,7 +58,7 @@ Examples:
 		},
 	}
 
-	c.Flags().StringVar(&f.upstream, "upstream", "", "Upstream package name, optionally name@ref (default: [package].name from config or ./go.mod)")
+	c.Flags().StringVar(&f.upstream, "upstream", "", "Upstream package name, optionally name@ref (default: [package].name from config or local manifest)")
 	c.Flags().StringVar(&f.upstreamRepo, "upstream-repo", "", "Upstream git URL for cloning by ref (default: [package].repo)")
 	c.Flags().StringVar(&f.upstreamPath, "upstream-path", "", "Local path to the patched upstream (overrides @ref)")
 	c.Flags().StringVarP(&f.configPath, "config", "c", config.DefaultPath, "Path to downstream.toml; used if it exists")
@@ -68,7 +68,7 @@ Examples:
 	c.Flags().DurationVar(&f.timeout, "timeout", defaultTestTimeout, "Timeout for each test run")
 	c.Flags().BoolVar(&f.keep, "keep", false, "Keep workdir after run")
 
-	c.Flags().StringVarP(&ecosystem, "ecosystem", "e", "go", "Ecosystem for discovery")
+	c.Flags().StringVarP(&ecosystem, "ecosystem", "e", "", "Ecosystem for discovery (default: from local manifest)")
 	c.Flags().IntVarP(&limit, "limit", "n", defaultDiscoverLimit, "Number of dependents to discover when no config exists")
 	c.Flags().IntVar(&pool, "pool", 0, "Candidates to fetch before filtering (default limit*6)")
 	c.Flags().BoolVar(&noDiscover, "no-discover", false, "Fail if config doesn't exist instead of querying ecosyste.ms")
@@ -98,11 +98,17 @@ func loadOrDiscover(ctx context.Context, errw io.Writer, f testFlags, ecosystem 
 
 	module, ref, err := resolveModule(f.upstream, "")
 	if err != nil {
-		m, mErr := readGoModule()
+		m, eco, mErr := readLocalPackage(".")
 		if mErr != nil {
-			return "", "", "", nil, errors.New("--upstream is required (no config, no ./go.mod)")
+			return "", "", "", nil, fmt.Errorf("--upstream is required (no config, %w)", mErr)
 		}
 		module = m
+		if ecosystem == "" {
+			ecosystem = eco
+		}
+	}
+	if ecosystem == "" {
+		ecosystem = "go"
 	}
 
 	cands, err := discover.Discover(ctx, discover.Options{
