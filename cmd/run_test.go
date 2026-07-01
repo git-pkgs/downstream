@@ -38,15 +38,19 @@ func TestLoadOrDiscoverPrefersConfig(t *testing.T) {
 		http.Error(w, "should not be called", http.StatusInternalServerError)
 	})
 
-	module, ref, deps, err := loadOrDiscover(context.Background(), io.Discard, testFlags{
-		configPath: "testdata/downstream.toml",
-		upstream:   "github.com/spf13/cobra@v1.0.0",
+	module, repo, ref, deps, err := loadOrDiscover(context.Background(), io.Discard, testFlags{
+		configPath:   "testdata/downstream.toml",
+		upstream:     "github.com/spf13/cobra@v1.0.0",
+		upstreamRepo: "https://github.com/spf13/cobra",
 	}, "go", 5, 0, false)
 	if err != nil {
 		t.Fatalf("loadOrDiscover: %v", err)
 	}
 	if module != "github.com/spf13/cobra" || ref != "v1.0.0" {
 		t.Errorf("module/ref = %q/%q", module, ref)
+	}
+	if repo != "https://github.com/spf13/cobra" {
+		t.Errorf("repo = %q", repo)
 	}
 	if len(deps) != 2 {
 		t.Errorf("deps = %d, want 2 from config", len(deps))
@@ -74,7 +78,7 @@ func TestLoadOrDiscoverFallsBackToAPI(t *testing.T) {
 		})
 	})
 
-	module, _, deps, err := loadOrDiscover(context.Background(), io.Discard, testFlags{
+	module, _, _, deps, err := loadOrDiscover(context.Background(), io.Discard, testFlags{
 		configPath: filepath.Join(t.TempDir(), "missing.toml"),
 		upstream:   "github.com/acme/lib",
 	}, "go", 5, 10, false)
@@ -90,7 +94,7 @@ func TestLoadOrDiscoverFallsBackToAPI(t *testing.T) {
 }
 
 func TestLoadOrDiscoverNoDiscover(t *testing.T) {
-	_, _, _, err := loadOrDiscover(context.Background(), io.Discard, testFlags{
+	_, _, _, _, err := loadOrDiscover(context.Background(), io.Discard, testFlags{
 		configPath: filepath.Join(t.TempDir(), "missing.toml"),
 		upstream:   "github.com/acme/lib",
 	}, "go", 5, 0, true)
@@ -104,7 +108,7 @@ func TestLoadOrDiscoverConfigParseError(t *testing.T) {
 	p := filepath.Join(dir, "downstream.toml")
 	mustWriteFile(t, p, "not = valid = toml = at = all\n[[[")
 
-	_, _, _, err := loadOrDiscover(context.Background(), io.Discard, testFlags{
+	_, _, _, _, err := loadOrDiscover(context.Background(), io.Discard, testFlags{
 		configPath: p,
 		upstream:   "github.com/acme/lib",
 	}, "go", 5, 0, false)

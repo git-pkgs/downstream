@@ -22,6 +22,7 @@ const (
 
 type testFlags struct {
 	upstream     string
+	upstreamRepo string
 	upstreamPath string
 	dependent    string
 	configPath   string
@@ -45,8 +46,6 @@ of the difference.
 With --dependent, tests a single repo URL or local path. Otherwise reads
 dependents from downstream.toml (or --config), filtered by --only.
 
-Currently supports Go modules only.
-
 Examples:
   downstream test --upstream github.com/spf13/cobra --upstream-path . \
       --dependent https://github.com/cli/cli
@@ -57,13 +56,14 @@ Examples:
 		},
 	}
 
-	c.Flags().StringVar(&f.upstream, "upstream", "", "Upstream module path, optionally module@ref (default: [package].name from config)")
+	c.Flags().StringVar(&f.upstream, "upstream", "", "Upstream package name, optionally name@ref (default: [package].name from config)")
+	c.Flags().StringVar(&f.upstreamRepo, "upstream-repo", "", "Upstream git URL for cloning by ref (default: [package].repo)")
 	c.Flags().StringVar(&f.upstreamPath, "upstream-path", "", "Local path to the patched upstream (overrides @ref)")
 	c.Flags().StringVar(&f.dependent, "dependent", "", "Single dependent repo URL or local path (bypasses config)")
 	c.Flags().StringVarP(&f.configPath, "config", "c", config.DefaultPath, "Path to downstream.toml")
 	c.Flags().StringSliceVar(&f.only, "only", nil, "Filter dependents by name, slug, glob, or substring (repeatable)")
 	c.Flags().StringVar(&f.workdir, "workdir", "", "Directory for clones (default: temp dir)")
-	c.Flags().StringVar(&f.testCmd, "test", "", "Override test command (default: go test ./...)")
+	c.Flags().StringVar(&f.testCmd, "test", "", "Override test command (default: detected via brief)")
 	c.Flags().DurationVar(&f.timeout, "timeout", defaultTestTimeout, "Timeout for each test run")
 	c.Flags().BoolVar(&f.keep, "keep", false, "Keep workdir after run")
 
@@ -94,11 +94,12 @@ func runTest(cmd *cobra.Command, f testFlags) error {
 	if err != nil {
 		return err
 	}
+	repo := firstNonEmpty(f.upstreamRepo, cfg.Package.Repo)
 	if f.upstreamPath == "" && ref == "" {
-		return errors.New("provide --upstream-path or a ref in --upstream module@ref")
+		return errors.New("provide --upstream-path or a ref in --upstream name@ref")
 	}
 
-	return runMulti(ctx, out, errw, module, ref, deps, f)
+	return runMulti(ctx, out, errw, module, repo, ref, deps, f)
 }
 
 func runSingle(ctx context.Context, out, errw io.Writer, f testFlags) error {
@@ -112,6 +113,7 @@ func runSingle(ctx context.Context, out, errw io.Writer, f testFlags) error {
 
 	result, err := run.Test(ctx, run.Options{
 		Module:       module,
+		UpstreamRepo: f.upstreamRepo,
 		UpstreamRef:  ref,
 		UpstreamPath: f.upstreamPath,
 		Dependent:    f.dependent,
@@ -132,7 +134,7 @@ func runSingle(ctx context.Context, out, errw io.Writer, f testFlags) error {
 	return nil
 }
 
-func runMulti(ctx context.Context, out, errw io.Writer, module, ref string, deps []config.Dependent, f testFlags) error {
+func runMulti(ctx context.Context, out, errw io.Writer, module, repo, ref string, deps []config.Dependent, f testFlags) error {
 	workdir := f.workdir
 	if workdir == "" {
 		dir, err := os.MkdirTemp("", "downstream-")
@@ -147,7 +149,13 @@ func runMulti(ctx context.Context, out, errw io.Writer, module, ref string, deps
 		return err
 	}
 
-	upstreamPath, err := run.ResolveUpstream(ctx, workdir, module, ref, f.upstreamPath, errw)
+	upstreamPath, err := run.ResolveUpstream(ctx, workdir, run.Options{
+		Module:       module,
+		UpstreamRepo: repo,
+		UpstreamRef:  ref,
+		UpstreamPath: f.upstreamPath,
+		Stderr:       errw,
+	})
 	if err != nil {
 		return fmt.Errorf("resolving upstream: %w", err)
 	}

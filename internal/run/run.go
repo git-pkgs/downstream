@@ -18,7 +18,8 @@ import (
 const managerGo = "gomod"
 
 type Options struct {
-	Module       string        // upstream module path, e.g. github.com/spf13/cobra
+	Module       string        // upstream package name as the dependent's manager knows it
+	UpstreamRepo string        // git URL to clone the upstream from when UpstreamPath is empty
 	UpstreamRef  string        // git ref to clone the upstream at; ignored if UpstreamPath is set
 	UpstreamPath string        // local path to the patched upstream
 	Dependent    string        // repo URL or local path
@@ -46,7 +47,7 @@ func Test(ctx context.Context, opts Options) (*Result, error) {
 	}
 	defer cleanup()
 
-	upstreamPath, err := resolveUpstream(ctx, workdir, opts)
+	upstreamPath, err := ResolveUpstream(ctx, workdir, opts)
 	if err != nil {
 		return nil, fmt.Errorf("resolving upstream: %w", err)
 	}
@@ -130,30 +131,41 @@ func setupWorkdir(opts Options) (string, func(), error) {
 	return dir, cleanup, nil
 }
 
-func resolveUpstream(ctx context.Context, workdir string, opts Options) (string, error) {
-	return ResolveUpstream(ctx, workdir, opts.Module, opts.UpstreamRef, opts.UpstreamPath, opts.Stderr)
-}
-
 // ResolveUpstream returns an absolute path to the patched upstream
-// module. If path is set it's used as-is; otherwise the module is
-// cloned at ref into workdir/upstream. Exported so callers running
+// source. If opts.UpstreamPath is set it's validated by manager
+// detection and used as-is; otherwise opts.UpstreamRepo is cloned at
+// opts.UpstreamRef into workdir/upstream. Exported so callers running
 // many dependents can resolve once and pass the path to each Test.
-func ResolveUpstream(ctx context.Context, workdir, module, ref, path string, stderr io.Writer) (string, error) {
-	if path != "" {
-		abs, err := filepath.Abs(path)
+func ResolveUpstream(ctx context.Context, workdir string, opts Options) (string, error) {
+	if opts.Stderr == nil {
+		opts.Stderr = io.Discard
+	}
+
+	if opts.UpstreamPath != "" {
+		abs, err := filepath.Abs(opts.UpstreamPath)
 		if err != nil {
 			return "", err
 		}
-		if _, err := os.Stat(filepath.Join(abs, "go.mod")); err != nil {
-			return "", fmt.Errorf("no go.mod in %s", abs)
+		if _, err := detectManager(abs); err != nil {
+			return "", fmt.Errorf("upstream path %s: %w", abs, err)
 		}
 		return abs, nil
 	}
-	dest := filepath.Join(workdir, "upstream")
-	if stderr != nil {
-		_, _ = fmt.Fprintf(stderr, "downstream: cloning upstream %s@%s -> %s\n", module, ref, dest)
+
+	repo := opts.UpstreamRepo
+	if repo == "" {
+		// Go module paths are host/path and clone directly with an
+		// https scheme; bare package names (crates, gems, npm) need
+		// an explicit repo URL.
+		if !strings.Contains(opts.Module, "/") {
+			return "", fmt.Errorf("no upstream repo URL for %q; set [package].repo or use --upstream-path", opts.Module)
+		}
+		repo = "https://" + opts.Module
 	}
-	if err := clone(ctx, "https://"+module, ref, dest); err != nil {
+
+	dest := filepath.Join(workdir, "upstream")
+	logf(opts, "cloning upstream %s@%s -> %s", repo, opts.UpstreamRef, dest)
+	if err := clone(ctx, repo, opts.UpstreamRef, dest); err != nil {
 		return "", err
 	}
 	return dest, nil

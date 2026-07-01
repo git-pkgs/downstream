@@ -38,12 +38,12 @@ Examples:
 			ctx := cmd.Context()
 			out, errw := cmd.OutOrStdout(), cmd.ErrOrStderr()
 
-			module, ref, deps, err := loadOrDiscover(ctx, errw, f, ecosystem, limit, pool, noDiscover)
+			module, repo, ref, deps, err := loadOrDiscover(ctx, errw, f, ecosystem, limit, pool, noDiscover)
 			if err != nil {
 				return err
 			}
 			if f.upstreamPath == "" && ref == "" {
-				return errors.New("provide --upstream-path or a ref in --upstream module@ref")
+				return errors.New("provide --upstream-path or a ref in --upstream name@ref")
 			}
 
 			if len(f.only) > 0 {
@@ -54,16 +54,17 @@ Examples:
 				}
 			}
 
-			return runMulti(ctx, out, errw, module, ref, deps, f)
+			return runMulti(ctx, out, errw, module, repo, ref, deps, f)
 		},
 	}
 
-	c.Flags().StringVar(&f.upstream, "upstream", "", "Upstream module path, optionally module@ref (default: [package].name from config or ./go.mod)")
+	c.Flags().StringVar(&f.upstream, "upstream", "", "Upstream package name, optionally name@ref (default: [package].name from config or ./go.mod)")
+	c.Flags().StringVar(&f.upstreamRepo, "upstream-repo", "", "Upstream git URL for cloning by ref (default: [package].repo)")
 	c.Flags().StringVar(&f.upstreamPath, "upstream-path", "", "Local path to the patched upstream (overrides @ref)")
 	c.Flags().StringVarP(&f.configPath, "config", "c", config.DefaultPath, "Path to downstream.toml; used if it exists")
 	c.Flags().StringSliceVar(&f.only, "only", nil, "Filter dependents by name, slug, glob, or substring")
 	c.Flags().StringVar(&f.workdir, "workdir", "", "Directory for clones (default: temp dir)")
-	c.Flags().StringVar(&f.testCmd, "test", "", "Override test command (default: go test ./...)")
+	c.Flags().StringVar(&f.testCmd, "test", "", "Override test command (default: detected via brief)")
 	c.Flags().DurationVar(&f.timeout, "timeout", defaultTestTimeout, "Timeout for each test run")
 	c.Flags().BoolVar(&f.keep, "keep", false, "Keep workdir after run")
 
@@ -75,30 +76,31 @@ Examples:
 	parent.AddCommand(c)
 }
 
-// loadOrDiscover returns the upstream module, ref, and the set of
-// dependents to test. If the config file exists it wins; otherwise
-// discovery runs against ecosyste.ms.
-func loadOrDiscover(ctx context.Context, errw io.Writer, f testFlags, ecosystem string, limit, pool int, noDiscover bool) (string, string, []config.Dependent, error) {
+// loadOrDiscover returns the upstream module, repo URL, ref, and the
+// set of dependents to test. If the config file exists it wins;
+// otherwise discovery runs against ecosyste.ms.
+func loadOrDiscover(ctx context.Context, errw io.Writer, f testFlags, ecosystem string, limit, pool int, noDiscover bool) (string, string, string, []config.Dependent, error) {
 	if cfg, err := config.Load(f.configPath); err == nil {
 		module, ref, mErr := resolveModule(f.upstream, cfg.Package.Name)
 		if mErr != nil {
-			return "", "", nil, mErr
+			return "", "", "", nil, mErr
 		}
+		repo := firstNonEmpty(f.upstreamRepo, cfg.Package.Repo)
 		_, _ = fmt.Fprintf(errw, "downstream: using %s (%d dependents)\n", f.configPath, len(cfg.Dependents))
-		return module, ref, cfg.Dependents, nil
+		return module, repo, ref, cfg.Dependents, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", "", nil, err
+		return "", "", "", nil, err
 	}
 
 	if noDiscover {
-		return "", "", nil, fmt.Errorf("%s not found and --no-discover is set", f.configPath)
+		return "", "", "", nil, fmt.Errorf("%s not found and --no-discover is set", f.configPath)
 	}
 
 	module, ref, err := resolveModule(f.upstream, "")
 	if err != nil {
 		m, mErr := readGoModule()
 		if mErr != nil {
-			return "", "", nil, errors.New("--upstream is required (no config, no ./go.mod)")
+			return "", "", "", nil, errors.New("--upstream is required (no config, no ./go.mod)")
 		}
 		module = m
 	}
@@ -112,11 +114,11 @@ func loadOrDiscover(ctx context.Context, errw io.Writer, f testFlags, ecosystem 
 		Stderr:    errw,
 	})
 	if err != nil {
-		return "", "", nil, err
+		return "", "", "", nil, err
 	}
 	deps := make([]config.Dependent, len(cands))
 	for i, c := range cands {
 		deps[i] = c.Dependent()
 	}
-	return module, ref, deps, nil
+	return module, f.upstreamRepo, ref, deps, nil
 }

@@ -63,6 +63,46 @@ func TestRunFailed(t *testing.T) {
 	}
 }
 
+func TestResolveUpstreamLocalPath(t *testing.T) {
+	ctx := context.Background()
+	workdir := t.TempDir()
+
+	// A directory with any manifest managers.Detector recognises should
+	// pass; use Cargo.toml to prove the check isn't Go-specific.
+	crate := filepath.Join(workdir, "crate")
+	mustMkdir(t, crate)
+	mustWrite(t, filepath.Join(crate, "Cargo.toml"), "[package]\nname = \"x\"\n")
+
+	got, err := ResolveUpstream(ctx, workdir, Options{UpstreamPath: crate})
+	if err != nil {
+		t.Fatalf("cargo dir: %v", err)
+	}
+	if got != crate {
+		t.Errorf("path = %q, want %q", got, crate)
+	}
+
+	empty := filepath.Join(workdir, "empty")
+	mustMkdir(t, empty)
+	if _, err := ResolveUpstream(ctx, workdir, Options{UpstreamPath: empty}); err == nil {
+		t.Fatal("empty dir: want manager-detect error, got nil")
+	} else if strings.Contains(err.Error(), "go.mod") {
+		t.Errorf("error = %v; should not be Go-specific", err)
+	}
+}
+
+func TestResolveUpstreamBareNameNeedsRepo(t *testing.T) {
+	// A bare package name (crate/gem/npm) with no repo URL and no
+	// local path should error with a hint rather than trying to clone
+	// https://serde_json.
+	_, err := ResolveUpstream(context.Background(), t.TempDir(), Options{
+		Module:      "serde_json",
+		UpstreamRef: "main",
+	})
+	if err == nil || !strings.Contains(err.Error(), "[package].repo") {
+		t.Fatalf("error = %v, want [package].repo hint", err)
+	}
+}
+
 func TestRunRejectsManagerWithoutReplacePath(t *testing.T) {
 	workdir := t.TempDir()
 	pipDep := filepath.Join(workdir, "src")

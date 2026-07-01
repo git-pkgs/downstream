@@ -30,6 +30,9 @@ func WriteTo(w io.Writer, cfg *Config) (int64, error) {
 	if cfg.Package.Ecosystem != "" {
 		writeKV(&b, "ecosystem", cfg.Package.Ecosystem)
 	}
+	if cfg.Package.Repo != "" {
+		writeKV(&b, "repo", cfg.Package.Repo)
+	}
 	if cfg.Package.Build != "" {
 		writeKV(&b, "build", cfg.Package.Build)
 	}

@@ -23,6 +23,7 @@ type Config struct {
 type Package struct {
 	Name      string `toml:"name"`
 	Ecosystem string `toml:"ecosystem"`
+	Repo      string `toml:"repo,omitempty"`
 	Build     string `toml:"build,omitempty"`
 }
 
