@@ -25,15 +25,7 @@ func (r TestRun) Passed() bool {
 }
 
 func runTests(ctx context.Context, dir string, opts Options) TestRun {
-	cmd := testCommand(opts)
-	return runIn(ctx, dir, opts.Timeout, cmd...)
-}
-
-func testCommand(opts Options) []string {
-	if opts.TestCmd != "" {
-		return strings.Fields(opts.TestCmd)
-	}
-	return []string{"go", "test", "./..."}
+	return runIn(ctx, dir, opts.Timeout, strings.Fields(opts.TestCmd)...)
 }
 
 func tidy(ctx context.Context, dir string) error {

@@ -86,6 +86,9 @@ func Test(ctx context.Context, opts Options) (*Result, error) {
 	install(ctx, mgr, opts, "after clone")
 
 	opts.TestCmd, result.Narrowed = resolveTestCommand(ctx, dependentPath, mgr.Name(), opts)
+	if opts.TestCmd == "" {
+		return nil, fmt.Errorf("no test command for %s: none configured and brief detected nothing", dependentPath)
+	}
 	logf(opts, "test command: %s", opts.TestCmd)
 
 	logf(opts, "running baseline tests in %s", dependentPath)
@@ -217,23 +220,22 @@ func install(ctx context.Context, mgr managers.Manager, opts Options, stage stri
 // patched. Precedence:
 //
 //  1. User-supplied TestCmd (flag or downstream.toml) wins.
-//  2. brief CLI in the dependent: if it reports a project-defined
-//     test script (Makefile target, package.json script) use that
-//     as-is since it may carry flags or setup auto-narrowing would
-//     bypass.
+//  2. brief detection in the dependent: if it reports a
+//     project-defined test script (Makefile target, package.json
+//     script) use that as-is since it may carry flags or setup that
+//     auto-narrowing would bypass.
 //  3. For Go, auto-narrow to packages whose imports reach the
 //     upstream module.
-//  4. brief's generic command if any; otherwise the per-ecosystem
-//     fallback.
+//  4. brief's generic per-ecosystem command from its knowledge base.
 //
 // Returns the command and the auto-narrow package count (0 if not
-// narrowed).
+// narrowed). An empty command means brief recognised nothing.
 func resolveTestCommand(ctx context.Context, dir, manager string, opts Options) (string, int) {
 	if opts.TestCmd != "" {
 		return opts.TestCmd, 0
 	}
 
-	detected, fromProject := briefDetect(ctx, dir)
+	detected, fromProject := briefDetect(dir)
 	if detected != "" {
 		logf(opts, "brief detected test command %q (project-script=%v)", detected, fromProject)
 	}
@@ -248,35 +250,7 @@ func resolveTestCommand(ctx context.Context, dir, manager string, opts Options) 
 		}
 	}
 
-	if detected != "" {
-		return detected, 0
-	}
-	return fallbackTestCommand(manager), 0
-}
-
-func fallbackTestCommand(manager string) string {
-	switch manager {
-	case managerGo:
-		return "go test ./..."
-	case "cargo":
-		return "cargo test"
-	case "npm":
-		return "npm test"
-	case "pnpm":
-		return "pnpm test"
-	case "yarn":
-		return "yarn test"
-	case "bun":
-		return "bun test"
-	case "bundler":
-		return "bundle exec rake test"
-	case "uv":
-		return "uv run pytest"
-	case "composer":
-		return "composer test"
-	default:
-		return ""
-	}
+	return detected, 0
 }
 
 func logf(opts Options, format string, args ...any) {

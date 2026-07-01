@@ -1,65 +1,52 @@
 package run
 
 import (
-	"context"
-	"encoding/json"
-	"os/exec"
+	"sync"
+
+	"github.com/git-pkgs/brief"
+	"github.com/git-pkgs/brief/detect"
+	"github.com/git-pkgs/brief/kb"
 )
 
-// briefDetect runs the brief CLI against dir and returns the
-// project's test command and whether it came from a project script
-// (Makefile target, package.json script, etc.) as opposed to a
+var loadKB = sync.OnceValues(func() (*kb.KnowledgeBase, error) {
+	return kb.Load(brief.KnowledgeFS)
+})
+
+// briefDetect runs brief's detection engine against dir and returns
+// the project's test command and whether it came from a project
+// script (Makefile target, package.json script, etc.) as opposed to a
 // generic per-language default. A project-script command should be
 // used as-is; a generic default can be replaced by auto-narrowing.
 //
-// Returns ("", false) if brief is not installed or finds nothing.
-func briefDetect(ctx context.Context, dir string) (cmd string, fromProject bool) {
-	out, err := exec.CommandContext(ctx, "brief", "-json", dir).Output()
+// Linked as a library rather than shelling out so downstream doesn't
+// need brief on PATH and so brief's knowledge base is the single
+// source of per-ecosystem test commands.
+func briefDetect(dir string) (cmd string, fromProject bool) {
+	knowledge, err := loadKB()
 	if err != nil {
 		return "", false
 	}
-
-	var b briefOutput
-	if err := json.Unmarshal(out, &b); err != nil {
+	report, err := detect.New(knowledge, dir).Run()
+	if err != nil {
 		return "", false
 	}
-	return extractBriefTest(b)
+	return extractBriefTest(report)
 }
 
-func extractBriefTest(b briefOutput) (cmd string, fromProject bool) {
-	for _, t := range b.Tools.Test {
-		if t.Command.Run == "" {
+func extractBriefTest(r *brief.Report) (cmd string, fromProject bool) {
+	for _, t := range r.Tools["test"] {
+		if t.Command == nil || t.Command.Run == "" {
 			continue
 		}
-		// brief defines project_script, knowledge_base, config_file;
-		// only knowledge_base is a generic per-language default that
-		// it's safe to replace with auto-narrowing.
-		return t.Command.Run, t.Command.Source != "knowledge_base"
+		// Only knowledge_base is a generic per-language default that
+		// it's safe to replace with auto-narrowing; project_script
+		// and config_file both reflect a choice made in the repo.
+		return t.Command.Run, t.Command.Source != brief.SourceKnowledgeBase
 	}
-	for _, s := range b.Scripts {
+	for _, s := range r.Scripts {
 		if s.Name == "test" && s.Run != "" {
 			return s.Run, true
 		}
 	}
 	return "", false
-}
-
-type briefOutput struct {
-	Tools struct {
-		Test []briefTool `json:"test"`
-	} `json:"tools"`
-	Scripts []briefScript `json:"scripts"`
-}
-
-type briefTool struct {
-	Name    string `json:"name"`
-	Command struct {
-		Run    string `json:"run"`
-		Source string `json:"source"`
-	} `json:"command"`
-}
-
-type briefScript struct {
-	Name string `json:"name"`
-	Run  string `json:"run"`
 }
