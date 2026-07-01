@@ -95,13 +95,12 @@ func Test(ctx context.Context, opts Options) (*Result, error) {
 	result.Baseline = runTests(ctx, dependentPath, opts)
 
 	logf(opts, "replacing %s -> %s", opts.Module, upstreamPath)
-	if _, err := mgr.Replace(ctx, opts.Module, managers.ReplaceOptions{Path: upstreamPath}); err != nil {
+	r, err := mgr.Replace(ctx, opts.Module, managers.ReplaceOptions{Path: upstreamPath})
+	if err != nil {
 		return nil, fmt.Errorf("replace: %w", err)
 	}
-	if mgr.Name() == managerGo {
-		if err := tidy(ctx, dependentPath); err != nil {
-			return nil, fmt.Errorf("go mod tidy after replace: %w", err)
-		}
+	if r != nil && r.ExitCode != 0 {
+		return nil, fmt.Errorf("replace exited %d:\n%s", r.ExitCode, strings.TrimSpace(r.Stderr))
 	}
 	// Re-resolve after the override. For Go this is cheap (everything
 	// cached); for cargo/uv/bundler it's required since Replace only

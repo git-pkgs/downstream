@@ -7,8 +7,6 @@ import (
 	"time"
 )
 
-const tidyTimeout = 5 * time.Minute
-
 // TestRun captures the outcome of one `go test ./...` invocation.
 // Step 5 in the plan upgrades this to per-test diffing via -json; for
 // now it's exit-code plus combined output.
@@ -26,17 +24,6 @@ func (r TestRun) Passed() bool {
 
 func runTests(ctx context.Context, dir string, opts Options) TestRun {
 	return runIn(ctx, dir, opts.Timeout, strings.Fields(opts.TestCmd)...)
-}
-
-func tidy(ctx context.Context, dir string) error {
-	r := runIn(ctx, dir, tidyTimeout, "go", "mod", "tidy")
-	if r.Err != nil {
-		return r.Err
-	}
-	if r.ExitCode != 0 {
-		return &exec.ExitError{Stderr: []byte(r.Output)}
-	}
-	return nil
 }
 
 func runIn(ctx context.Context, dir string, timeout time.Duration, argv ...string) TestRun {
