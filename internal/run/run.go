@@ -4,6 +4,7 @@ package run
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -200,7 +201,67 @@ func detectManager(dir string) (managers.Manager, error) { //nolint:ireturn
 	for _, def := range defs {
 		det.Register(def)
 	}
+	if manager := npmFamilyManagerHint(dir); manager != "" {
+		return det.Detect(dir, managers.DetectOptions{Manager: manager})
+	}
 	return det.Detect(dir, managers.DetectOptions{})
+}
+
+func npmFamilyManagerHint(dir string) string {
+	if _, err := os.Stat(filepath.Join(dir, "package.json")); err != nil {
+		return ""
+	}
+
+	if hasAnyFile(dir, "package-lock.json", "npm-shrinkwrap.json") {
+		return "npm"
+	}
+	if hasAnyFile(dir, "pnpm-lock.yaml") {
+		return "pnpm"
+	}
+	if hasAnyFile(dir, "yarn.lock") {
+		return "yarn"
+	}
+	if hasAnyFile(dir, "bun.lock", "bun.lockb") {
+		return "bun"
+	}
+	if manager := packageManagerField(dir); manager != "" {
+		return manager
+	}
+
+	// managers' generic detector ranks bun above npm for a bare
+	// package.json because bun should win when its lockfile is present.
+	// Without a lockfile or packageManager field, npm is the least
+	// surprising default for npm-ecosystem repos.
+	return "npm"
+}
+
+func hasAnyFile(dir string, names ...string) bool {
+	for _, name := range names {
+		if _, err := os.Stat(filepath.Join(dir, name)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func packageManagerField(dir string) string {
+	b, err := os.ReadFile(filepath.Join(dir, "package.json"))
+	if err != nil {
+		return ""
+	}
+	var pkg struct {
+		PackageManager string `json:"packageManager"`
+	}
+	if err := json.Unmarshal(b, &pkg); err != nil {
+		return ""
+	}
+	name, _, _ := strings.Cut(pkg.PackageManager, "@")
+	switch name {
+	case "npm", "pnpm", "yarn", "bun":
+		return name
+	default:
+		return ""
+	}
 }
 
 func install(ctx context.Context, mgr managers.Manager, opts Options, stage string) {

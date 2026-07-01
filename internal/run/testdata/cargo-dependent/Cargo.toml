@@ -1,0 +1,10 @@
+[package]
+name = "downstream_fixture_dependent"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+downstream_fixture_upstream = "0.1.0"
+
+[patch.crates-io]
+downstream_fixture_upstream = { path = "../cargo-upstream" }

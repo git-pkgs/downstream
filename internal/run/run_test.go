@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -63,6 +64,61 @@ func TestRunFailed(t *testing.T) {
 	}
 }
 
+func TestRunCargoFailed(t *testing.T) {
+	requireCommand(t, "cargo")
+
+	result := runFixtureWithBaseline(t, fixtureRun{
+		module:           "downstream_fixture_upstream",
+		baselineFixture:  "cargo-upstream",
+		upstreamFixture:  "cargo-upstream-broken",
+		dependentFixture: "cargo-dependent",
+	})
+
+	if result.Manager != "cargo" {
+		t.Fatalf("manager = %q, want cargo", result.Manager)
+	}
+	if result.Status() != StatusFailed {
+		t.Fatalf("status = %s, want failed\nbaseline:\n%s\npatched:\n%s",
+			result.Status(), result.Baseline.Output, result.Patched.Output)
+	}
+	if !result.Baseline.Passed() {
+		t.Errorf("baseline should pass: %s", result.Baseline.Output)
+	}
+	if result.Patched.Passed() {
+		t.Errorf("patched should fail")
+	}
+
+	cargoToml := readWorkfile(t, result.DependentPath, "Cargo.toml")
+	if !strings.Contains(cargoToml, result.UpstreamPath) {
+		t.Errorf("Cargo.toml missing patched upstream path %q:\n%s", result.UpstreamPath, cargoToml)
+	}
+}
+
+func TestRunNPMFailed(t *testing.T) {
+	requireCommand(t, "npm")
+
+	result := runFixtureWithBaseline(t, fixtureRun{
+		module:           "downstream-fixture-upstream",
+		baselineFixture:  "npm-upstream",
+		upstreamFixture:  "npm-upstream-broken",
+		dependentFixture: "npm-dependent",
+	})
+
+	if result.Manager != "npm" {
+		t.Fatalf("manager = %q, want npm", result.Manager)
+	}
+	if result.Status() != StatusFailed {
+		t.Fatalf("status = %s, want failed\nbaseline:\n%s\npatched:\n%s",
+			result.Status(), result.Baseline.Output, result.Patched.Output)
+	}
+	if !result.Baseline.Passed() {
+		t.Errorf("baseline should pass: %s", result.Baseline.Output)
+	}
+	if result.Patched.Passed() {
+		t.Errorf("patched should fail")
+	}
+}
+
 func TestResolveUpstreamLocalPath(t *testing.T) {
 	ctx := context.Background()
 	workdir := t.TempDir()
@@ -103,6 +159,60 @@ func TestResolveUpstreamBareNameNeedsRepo(t *testing.T) {
 	}
 }
 
+func TestDetectManagerNPMFamilyHints(t *testing.T) {
+	tests := []struct {
+		name  string
+		files map[string]string
+		want  string
+	}{
+		{
+			name: "package json only defaults to npm",
+			files: map[string]string{
+				"package.json": `{"name":"x","version":"1.0.0"}`,
+			},
+			want: "npm",
+		},
+		{
+			name: "package lock selects npm",
+			files: map[string]string{
+				"package.json":      `{"name":"x","version":"1.0.0"}`,
+				"package-lock.json": `{}`,
+			},
+			want: "npm",
+		},
+		{
+			name: "package manager selects pnpm",
+			files: map[string]string{
+				"package.json": `{"name":"x","version":"1.0.0","packageManager":"pnpm@10.0.0"}`,
+			},
+			want: "pnpm",
+		},
+		{
+			name: "bun lock selects bun",
+			files: map[string]string{
+				"package.json": `{"name":"x","version":"1.0.0"}`,
+				"bun.lock":     "",
+			},
+			want: "bun",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			for name, content := range tt.files {
+				mustWrite(t, filepath.Join(dir, name), content)
+			}
+			mgr, err := detectManager(dir)
+			if err != nil {
+				t.Fatalf("detectManager: %v", err)
+			}
+			if mgr.Name() != tt.want {
+				t.Fatalf("manager = %q, want %q", mgr.Name(), tt.want)
+			}
+		})
+	}
+}
+
 func TestRunRejectsManagerWithoutReplacePath(t *testing.T) {
 	workdir := t.TempDir()
 	pipDep := filepath.Join(workdir, "src")
@@ -124,17 +234,36 @@ func TestRunRejectsManagerWithoutReplacePath(t *testing.T) {
 func runFixture(t *testing.T, upstreamFixture string) *Result {
 	t.Helper()
 
+	return runFixtureWithBaseline(t, fixtureRun{
+		module:           "example.test/upstream",
+		baselineFixture:  "upstream",
+		upstreamFixture:  upstreamFixture,
+		dependentFixture: "dependent",
+	})
+}
+
+type fixtureRun struct {
+	module           string
+	baselineFixture  string
+	upstreamFixture  string
+	dependentFixture string
+}
+
+func runFixtureWithBaseline(t *testing.T, fr fixtureRun) *Result {
+	t.Helper()
+
 	workdir := t.TempDir()
-	// Seed workdir/upstream with the good library so the dependent's
-	// relative `../upstream` replace resolves for the baseline run.
-	if err := copyDir(fixturePath(t, "upstream"), filepath.Join(workdir, "upstream")); err != nil {
+	// Seed workdir/<baselineFixture> with the good library so relative
+	// baseline replacements like ../upstream or file:../npm-upstream
+	// resolve after the dependent is copied into workdir/dependent.
+	if err := copyDir(fixturePath(t, fr.baselineFixture), filepath.Join(workdir, fr.baselineFixture)); err != nil {
 		t.Fatalf("seed baseline upstream: %v", err)
 	}
 
 	result, err := Test(context.Background(), Options{
-		Module:       "example.test/upstream",
-		UpstreamPath: fixturePath(t, upstreamFixture),
-		Dependent:    fixturePath(t, "dependent"),
+		Module:       fr.module,
+		UpstreamPath: fixturePath(t, fr.upstreamFixture),
+		Dependent:    fixturePath(t, fr.dependentFixture),
 		Workdir:      workdir,
 		Timeout:      2 * time.Minute,
 		Stderr:       io.Discard,
@@ -143,6 +272,13 @@ func runFixture(t *testing.T, upstreamFixture string) *Result {
 		t.Fatalf("Test: %v", err)
 	}
 	return result
+}
+
+func requireCommand(t *testing.T, name string) {
+	t.Helper()
+	if _, err := exec.LookPath(name); err != nil {
+		t.Skipf("%s not on PATH", name)
+	}
 }
 
 func fixturePath(t *testing.T, name string) string {

@@ -4,7 +4,13 @@ Tests a library against the projects that depend on it. `downstream` clones a se
 
 The dependent set can be discovered automatically from the [ecosyste.ms](https://ecosyste.ms) package index or curated by hand in a `downstream.toml` file committed to the library's repository. Replacement is performed through the [managers](https://github.com/git-pkgs/managers) library, which maps the operation onto each package manager's own override mechanism.
 
-Go modules are supported now; npm, Cargo, Bundler, uv and Composer are handled by the underlying replace operation and will be enabled in `downstream` in a later release.
+Supported today:
+
+- Go modules: baseline/replace/retest, plus auto-narrowing to packages whose imports reach the upstream module.
+- Cargo crates: baseline/replace/retest with test commands detected by `brief` or configured with `test`.
+- npm-family package managers: baseline/replace/retest with test commands detected by `brief` or configured with `test`.
+
+Bundler, uv, and Composer are handled by the underlying replace operation and will be enabled in `downstream` in a later release.
 
 ## Install
 
@@ -74,7 +80,11 @@ repo = "https://github.com/gohugoio/hugo"
 source = "manual"              # kept regardless of discover ranking
 ```
 
-The test command for each dependent defaults to `go test` over the packages whose imports reach the upstream module, computed via `go list -test -json ./...`. A `test` field overrides this.
+Test commands are resolved in this order:
+
+- A dependent's `test` field overrides all automatic detection.
+- Go dependents default to `go test` over packages whose imports reach the upstream module, computed via `go list -test -json ./...`.
+- Other supported ecosystems use the test command detected by `brief`, such as `cargo test`, `npm test`, or a project script.
 
 ## GitHub Actions
 
@@ -140,7 +150,13 @@ Triggering on a `test-downstream` label rather than every push keeps the cost ma
 
 ## How replacement works
 
-For Go, `downstream` runs `go mod edit -replace <module>=<path>` followed by `go mod tidy`, which redirects the module across the dependent's entire build including transitive consumers. Cargo `[patch.crates-io]` and uv `[tool.uv.sources]` behave the same way; the npm-family `file:` install is direct-only. See the [managers replace documentation](https://github.com/git-pkgs/managers/blob/main/docs/replace.md) for per-ecosystem behaviour and limitations.
+Replacement is delegated to `managers` and follows each ecosystem's native override mechanism:
+
+- Go: `downstream` runs `go mod edit -replace <module>=<path>` followed by `go mod tidy`, redirecting the module across the dependent's entire build including transitive consumers.
+- Cargo: `[patch.crates-io]` redirects the crate across the dependent's entire build, including transitive consumers.
+- npm-family managers: `file:` installs redirect the dependent's direct dependency; transitive consumers in the same tree keep their registry copy.
+
+See the [managers replace documentation](https://github.com/git-pkgs/managers/blob/main/docs/replace.md) for per-ecosystem behaviour and limitations.
 
 ## Result classification
 

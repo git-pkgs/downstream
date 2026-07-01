@@ -1,0 +1,11 @@
+{
+  "name": "downstream-fixture-dependent",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "downstream-fixture-upstream": "file:../npm-upstream"
+  }
+}
