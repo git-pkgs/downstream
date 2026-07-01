@@ -21,7 +21,7 @@ cd /path/to/your/library
 downstream run --upstream-path . --limit 5
 ```
 
-`downstream discover` queries the ecosyste.ms `dependent_packages` API for the most-used packages that depend on the given module, drops forks and archived or stale repositories, shallow-clones the survivors to score them on test count and on how many files import the module, and writes the ranked top N to `downstream.toml`. Re-running against an existing file keeps entries with `source = "manual"` and any per-dependent overrides; previously discovered entries are rescored and new candidates appended with a `(new)` marker.
+`downstream discover` queries the ecosyste.ms `dependent_packages` API for the most-used packages that depend on the given package, drops forks and archived or stale repositories, shallow-clones the survivors to score them on test count and on how many source files reference the package, and writes the ranked top N to `downstream.toml`. Re-running against an existing file keeps entries with `source = "manual"` and any per-dependent overrides; previously discovered entries are rescored and new candidates appended with a `(new)` marker.
 
 ```bash
 downstream discover --limit 5
@@ -58,7 +58,7 @@ downstream test --upstream-path . --only cli/cli
 name = "github.com/spf13/cobra"
 ecosystem = "go"
 
-# discover: 27 files import upstream, 412 test files, 142019 dependent repos, 38447 stars
+# discover: 27 files reference upstream, 412 test files, 142019 dependent repos, 38447 stars
 [[dependents]]
 name = "github.com/cli/cli"
 repo = "https://github.com/cli/cli"

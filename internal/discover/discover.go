@@ -44,8 +44,8 @@ type Candidate struct {
 	Language          string
 
 	// Phase two (Analyze)
-	TestFiles   int  // *_test.go count
-	ImportFiles int  // .go files importing the upstream module
+	TestFiles   int  // files under a test dir or matching a test-name pattern
+	ImportFiles int  // source files whose content mentions the upstream package name
 	Analyzed    bool // distinguishes "not analyzed" from "analyzed, zero"
 	New         bool // appended by reconcile, not in the existing file
 
@@ -58,10 +58,10 @@ type Candidate struct {
 	dropReason string
 }
 
-// Score ranks candidates. After Analyze, ImportFiles dominates
-// (a candidate that actually exercises the upstream beats a
-// popular one that barely touches it); before Analyze, falls back
-// to popularity.
+// Score ranks candidates. After Analyze, files that reference the
+// upstream and test-file count dominate (a candidate that exercises
+// and tests the upstream beats a popular one that barely touches it);
+// before Analyze, falls back to popularity.
 func (c Candidate) Score() int64 {
 	base := c.Downloads
 	if base == 0 {
@@ -71,6 +71,7 @@ func (c Candidate) Score() int64 {
 		return base
 	}
 	return int64(c.ImportFiles)*scoreImportWeight +
+		int64(c.TestFiles)*scoreTestWeight +
 		int64(c.TransitiveReach)*scoreReachWeight +
 		base/scorePopDamp
 }
@@ -78,6 +79,7 @@ func (c Candidate) Score() int64 {
 const (
 	scoreRepoWeight   = 10
 	scoreImportWeight = 1_000_000
+	scoreTestWeight   = 200_000
 	scoreReachWeight  = 100_000
 	scorePopDamp      = 100
 )
@@ -85,7 +87,7 @@ const (
 func (c Candidate) Comment() string {
 	parts := []string{}
 	if c.Analyzed {
-		parts = append(parts, fmt.Sprintf("%d files import upstream", c.ImportFiles))
+		parts = append(parts, fmt.Sprintf("%d files reference upstream", c.ImportFiles))
 		parts = append(parts, fmt.Sprintf("%d test files", c.TestFiles))
 		if c.TransitiveReach > 0 {
 			parts = append(parts, fmt.Sprintf("%d transitive consumers", c.TransitiveReach))

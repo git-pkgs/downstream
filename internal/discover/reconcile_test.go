@@ -68,7 +68,7 @@ func TestReconcileMerge(t *testing.T) {
 			if d.Ref != "v1.0" || d.Test != "custom" || d.Source != "discover" {
 				t.Errorf("kept entry should preserve overrides: %+v", d)
 			}
-			if !strings.Contains(d.Comment, "7 files import upstream") {
+			if !strings.Contains(d.Comment, "7 files reference upstream") {
 				t.Errorf("kept entry should be rescored: %q", d.Comment)
 			}
 		case "untagged":
