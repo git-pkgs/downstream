@@ -16,7 +16,13 @@ import (
 	"github.com/git-pkgs/managers/definitions"
 )
 
-const managerGo = "gomod"
+const (
+	managerGo   = "gomod"
+	managerNPM  = "npm"
+	managerPNPM = "pnpm"
+	managerYarn = "yarn"
+	managerBun  = "bun"
+)
 
 type Options struct {
 	Module       string        // upstream package name as the dependent's manager knows it
@@ -213,16 +219,16 @@ func npmFamilyManagerHint(dir string) string {
 	}
 
 	if hasAnyFile(dir, "package-lock.json", "npm-shrinkwrap.json") {
-		return "npm"
+		return managerNPM
 	}
 	if hasAnyFile(dir, "pnpm-lock.yaml") {
-		return "pnpm"
+		return managerPNPM
 	}
 	if hasAnyFile(dir, "yarn.lock") {
-		return "yarn"
+		return managerYarn
 	}
 	if hasAnyFile(dir, "bun.lock", "bun.lockb") {
-		return "bun"
+		return managerBun
 	}
 	if manager := packageManagerField(dir); manager != "" {
 		return manager
@@ -232,7 +238,7 @@ func npmFamilyManagerHint(dir string) string {
 	// package.json because bun should win when its lockfile is present.
 	// Without a lockfile or packageManager field, npm is the least
 	// surprising default for npm-ecosystem repos.
-	return "npm"
+	return managerNPM
 }
 
 func hasAnyFile(dir string, names ...string) bool {
@@ -257,7 +263,7 @@ func packageManagerField(dir string) string {
 	}
 	name, _, _ := strings.Cut(pkg.PackageManager, "@")
 	switch name {
-	case "npm", "pnpm", "yarn", "bun":
+	case managerNPM, managerPNPM, managerYarn, managerBun:
 		return name
 	default:
 		return ""
