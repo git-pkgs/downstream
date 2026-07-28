@@ -6,7 +6,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/git-pkgs/brief v0.9.3
 	github.com/git-pkgs/managers v0.10.1
-	github.com/git-pkgs/manifests v0.6.0
+	github.com/git-pkgs/manifests v0.6.1
 	github.com/spf13/cobra v1.10.2
 )
 
@@ -14,9 +14,9 @@ require (
 	github.com/bazelbuild/buildtools v0.0.0-20260622120422-77b9b380c0a4 // indirect
 	github.com/git-pkgs/licensecheck v0.4.1 // indirect
 	github.com/git-pkgs/pom v0.1.5 // indirect
-	github.com/git-pkgs/purl v0.1.13 // indirect
+	github.com/git-pkgs/purl v0.1.15 // indirect
 	github.com/git-pkgs/spdx v0.1.4 // indirect
-	github.com/git-pkgs/vers v0.2.6 // indirect
+	github.com/git-pkgs/vers v0.3.0 // indirect
 	github.com/github/go-spdx/v2 v2.7.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/package-url/packageurl-go v0.1.6 // indirect
