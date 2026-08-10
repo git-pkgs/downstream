@@ -5,7 +5,7 @@ go 1.26.4
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/git-pkgs/brief v0.9.4
-	github.com/git-pkgs/dependents v0.0.0-20260810185351-ddfe65bb8fe8
+	github.com/git-pkgs/dependents v0.1.0
 	github.com/git-pkgs/managers v0.10.1
 	github.com/git-pkgs/manifests v0.7.0
 	github.com/spf13/cobra v1.10.2
