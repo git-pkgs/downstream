@@ -253,10 +253,11 @@ func TestDependentPackagesPaging(t *testing.T) {
 	}
 }
 
-func TestScorePrefersDownloads(t *testing.T) {
-	a := Candidate{DependentRepos: 1000, Stars: 50000}
-	b := Candidate{Downloads: 5_000_000}
-	if b.Score() <= a.Score() {
-		t.Errorf("downloads should win: a=%d b=%d", a.Score(), b.Score())
+func TestRankPrefersDownloads(t *testing.T) {
+	popularByRepositories := Candidate{Name: "repos", Repo: "https://x/repos", DependentRepos: 1000, Stars: 50000}
+	popularByDownloads := Candidate{Name: "downloads", Repo: "https://x/downloads", Downloads: 5_000_000}
+	ranked := rankCandidates([]Candidate{popularByRepositories, popularByDownloads}, 0)
+	if ranked[0].Name != "downloads" {
+		t.Errorf("rank[0] = %s, want downloads", ranked[0].Name)
 	}
 }
