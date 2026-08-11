@@ -6,12 +6,12 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/git-pkgs/brief v0.9.4
 	github.com/git-pkgs/managers v0.10.1
-	github.com/git-pkgs/manifests v0.6.1
+	github.com/git-pkgs/manifests v0.7.0
 	github.com/spf13/cobra v1.10.2
 )
 
 require (
-	github.com/bazelbuild/buildtools v0.0.0-20260622120422-77b9b380c0a4 // indirect
+	github.com/bazelbuild/buildtools v0.0.0-20260716142318-04cf7de1434f // indirect
 	github.com/git-pkgs/licensecheck v0.4.1 // indirect
 	github.com/git-pkgs/pom v0.1.5 // indirect
 	github.com/git-pkgs/purl v0.1.15 // indirect
