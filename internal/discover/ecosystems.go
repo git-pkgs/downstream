@@ -84,6 +84,7 @@ type RepoMetadata struct {
 	HTMLURL         string    `json:"html_url"`
 	Fork            bool      `json:"fork"`
 	Archived        bool      `json:"archived"`
+	MirrorURL       string    `json:"mirror_url"`
 	StargazersCount int       `json:"stargazers_count"`
 	PushedAt        time.Time `json:"pushed_at"`
 	Language        string    `json:"language"`

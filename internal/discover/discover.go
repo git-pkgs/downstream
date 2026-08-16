@@ -1,17 +1,15 @@
-// Package discover finds and ranks dependents of a package via the
-// ecosyste.ms API. Phase one is API-only: fetch popularity-sorted
-// dependents, drop forks/archived/stale repos using the inline
-// repo_metadata, dedupe by repository, and rank.
+// Package discover adapts downstream's package-specific ecosyste.ms lookup
+// and configuration format to github.com/git-pkgs/dependents.
 package discover
 
 import (
 	"context"
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 	"time"
 
+	"github.com/git-pkgs/dependents"
 	"github.com/git-pkgs/downstream/internal/config"
 )
 
@@ -31,8 +29,9 @@ const (
 	defaultLimit   = 5
 )
 
-// Candidate is a dependent that survived phase-one filtering, with
-// phase-two fields filled by Analyze.
+// Candidate contains the downstream-specific presentation fields for a
+// repository candidate. Selection, ranking, and analysis are delegated to the
+// dependents package.
 type Candidate struct {
 	Name              string
 	Repo              string
@@ -43,55 +42,55 @@ type Candidate struct {
 	PushedAt          time.Time
 	Language          string
 
-	// Phase two (Analyze)
-	TestFiles   int  // files under a test dir or matching a test-name pattern
-	ImportFiles int  // source files whose content mentions the upstream package name
-	Analyzed    bool // distinguishes "not analyzed" from "analyzed, zero"
-	New         bool // appended by reconcile, not in the existing file
-
-	// Not yet implemented; placeholder so Comment() shape is stable.
-	TransitiveReach int // modules in go.sum that also depend on upstream
-	CIGreen         bool
-
-	// dropReason is set on candidates filtered out so the progress
-	// log can explain why.
-	dropReason string
+	TestFiles   int
+	ImportFiles int
+	Analyzed    bool
+	New         bool
 }
 
-// Score ranks candidates. After Analyze, files that reference the
-// upstream and test-file count dominate (a candidate that exercises
-// and tests the upstream beats a popular one that barely touches it);
-// before Analyze, falls back to popularity.
-func (c Candidate) Score() int64 {
-	base := c.Downloads
-	if base == 0 {
-		base = int64(c.DependentRepos)*scoreRepoWeight + int64(c.Stars)
+func (c Candidate) shared() dependents.Candidate {
+	return dependents.Candidate{
+		Repository: c.Repo,
+		Packages: []dependents.Package{{
+			Name:           c.Name,
+			Downloads:      c.Downloads,
+			DependentRepos: c.DependentRepos,
+		}},
+		RepositoryMetadata: dependents.RepositoryMetadata{
+			PushedAt:        c.PushedAt,
+			StargazersCount: c.Stars,
+			Language:        c.Language,
+		},
+		Downloads:      c.Downloads,
+		DependentRepos: c.DependentRepos,
+		Analysis: dependents.Analysis{
+			TestFiles:   c.TestFiles,
+			ImportFiles: c.ImportFiles,
+		},
+		Analyzed: c.Analyzed,
 	}
-	if !c.Analyzed {
-		return base
-	}
-	return int64(c.ImportFiles)*scoreImportWeight +
-		int64(c.TestFiles)*scoreTestWeight +
-		int64(c.TransitiveReach)*scoreReachWeight +
-		base/scorePopDamp
 }
 
-const (
-	scoreRepoWeight   = 10
-	scoreImportWeight = 1_000_000
-	scoreTestWeight   = 200_000
-	scoreReachWeight  = 100_000
-	scorePopDamp      = 100
-)
+func updateFromShared(candidate *Candidate, shared dependents.Candidate) {
+	candidate.Repo = shared.Repository
+	candidate.Stars = shared.RepositoryMetadata.StargazersCount
+	candidate.DependentRepos = shared.DependentRepos
+	candidate.Downloads = shared.Downloads
+	candidate.PushedAt = shared.RepositoryMetadata.PushedAt
+	candidate.Language = shared.RepositoryMetadata.Language
+	candidate.TestFiles = shared.Analysis.TestFiles
+	candidate.ImportFiles = shared.Analysis.ImportFiles
+	candidate.Analyzed = shared.Analyzed
+	if candidate.Name == "" && len(shared.Packages) > 0 {
+		candidate.Name = shared.Packages[0].Name
+	}
+}
 
 func (c Candidate) Comment() string {
 	parts := []string{}
 	if c.Analyzed {
 		parts = append(parts, fmt.Sprintf("%d files reference upstream", c.ImportFiles))
 		parts = append(parts, fmt.Sprintf("%d test files", c.TestFiles))
-		if c.TransitiveReach > 0 {
-			parts = append(parts, fmt.Sprintf("%d transitive consumers", c.TransitiveReach))
-		}
 	}
 	if c.DependentRepos > 0 {
 		parts = append(parts, fmt.Sprintf("%d dependent repos", c.DependentRepos))
@@ -127,7 +126,9 @@ func (c Candidate) Dependent() config.Dependent {
 	}
 }
 
-// Discover runs phase one and returns up to opts.Limit candidates.
+// Discover fetches package dependents, then uses the dependents package to
+// combine repositories, apply downstream's repository policy, and rank the
+// result.
 func Discover(ctx context.Context, opts Options) ([]Candidate, error) {
 	if opts.Limit <= 0 {
 		opts.Limit = defaultLimit
@@ -146,87 +147,127 @@ func Discover(ctx context.Context, opts Options) ([]Candidate, error) {
 	}
 
 	logf(opts, "querying ecosyste.ms for dependents of %s (%s), pool=%d", opts.Package, opts.Ecosystem, opts.Pool)
-	pkgs, err := opts.Client.DependentPackages(ctx, opts.Ecosystem, opts.Package, opts.Pool)
+	packages, err := opts.Client.DependentPackages(ctx, opts.Ecosystem, opts.Package, opts.Pool)
 	if err != nil {
 		return nil, err
 	}
-	logf(opts, "fetched %d candidates", len(pkgs))
-	if len(pkgs) == 0 {
+	logf(opts, "fetched %d candidates", len(packages))
+	if len(packages) == 0 {
 		return nil, fmt.Errorf("no dependents found for %s (%s); the package may not be indexed yet", opts.Package, opts.Ecosystem)
 	}
 
-	cands := buildCandidates(pkgs, opts)
-	kept, dropped := partition(cands, opts)
-	for _, c := range dropped {
-		logf(opts, "drop %s: %s", c.Name, c.dropReason)
-	}
-	sort.Slice(kept, func(i, j int) bool { return kept[i].Score() > kept[j].Score() })
-	if len(kept) > opts.Limit {
-		kept = kept[:opts.Limit]
-	}
-	logf(opts, "kept %d, dropped %d", len(kept), len(dropped))
-	return kept, nil
-}
+	group, details, dropped := buildGroup(packages, opts)
+	shared := dependents.Build([]dependents.Group{group})
 
-func buildCandidates(pkgs []Package, opts Options) []Candidate {
-	seen := make(map[string]bool, len(pkgs))
-	out := make([]Candidate, 0, len(pkgs))
-	for _, p := range pkgs {
-		c := candidateFrom(p, opts)
-		if c.Repo == "" {
-			c.dropReason = "no repository_url"
-		} else if seen[c.Repo] {
-			continue // monorepo: same repo hosts several packages
+	if upstream := opts.upstreamRepo(); upstream != "" {
+		withoutUpstream := make([]dependents.Candidate, 0, len(shared))
+		for _, candidate := range shared {
+			if len(dependents.ExcludeRepositories([]dependents.Candidate{candidate}, upstream)) == 0 {
+				logf(opts, "drop %s: same repository as upstream", candidateName(candidate))
+				dropped++
+				continue
+			}
+			withoutUpstream = append(withoutUpstream, candidate)
 		}
-		seen[c.Repo] = true
-		out = append(out, c)
+		shared = withoutUpstream
 	}
-	return out
-}
 
-func candidateFrom(p Package, opts Options) Candidate {
-	c := Candidate{
-		Name:              p.Name,
-		Repo:              firstNonEmpty(p.RepoMetadata.HTMLURL, p.RepositoryURL),
-		Stars:             p.RepoMetadata.StargazersCount,
-		DependentPackages: p.DependentPackagesCount,
-		DependentRepos:    p.DependentReposCount,
-		Downloads:         p.Downloads,
-		PushedAt:          p.RepoMetadata.PushedAt,
-		Language:          p.RepoMetadata.Language,
+	shared, rejected := dependents.Filter(shared, dependents.FilterOptions{
+		ExcludeForks:    true,
+		ExcludeArchived: true,
+		ExcludeMirrors:  true,
+		MaxAge:          opts.MaxAge,
+	})
+	for _, rejection := range rejected {
+		logf(opts, "drop %s: %s", candidateName(rejection.Candidate), rejectionMessage(rejection))
 	}
-	c.dropReason = dropReason(p, opts)
-	if c.Repo == opts.upstreamRepo() {
-		c.dropReason = "same repository as upstream"
-	}
-	return c
-}
+	dropped += len(rejected)
 
-func dropReason(p Package, opts Options) string {
-	switch {
-	case p.RepoMetadata.Fork:
-		return "fork"
-	case p.RepoMetadata.Archived:
-		return "archived"
-	case p.RepoMetadata.SourceName != "":
-		return "mirror of " + p.RepoMetadata.SourceName
-	case p.Status == "removed" || p.Status == "deprecated":
-		return p.Status
-	case !p.RepoMetadata.PushedAt.IsZero() && time.Since(p.RepoMetadata.PushedAt) > opts.MaxAge:
-		return fmt.Sprintf("stale (last push %s)", p.RepoMetadata.PushedAt.Format("2006-01-02"))
-	}
-	return ""
-}
-
-func partition(cands []Candidate, _ Options) (kept, dropped []Candidate) {
-	for _, c := range cands {
-		if c.dropReason == "" {
-			kept = append(kept, c)
-		} else {
-			dropped = append(dropped, c)
+	shared = dependents.Rank(shared, opts.Limit, nil)
+	candidates := make([]Candidate, 0, len(shared))
+	for _, candidate := range shared {
+		detail := details[candidate.Repository]
+		converted := Candidate{
+			Name:              detail.name,
+			DependentPackages: detail.dependentPackages,
 		}
+		updateFromShared(&converted, candidate)
+		candidates = append(candidates, converted)
 	}
-	return kept, dropped
+
+	logf(opts, "kept %d, dropped %d", len(candidates), dropped)
+	return candidates, nil
+}
+
+type candidateDetail struct {
+	name              string
+	dependentPackages int
+}
+
+func buildGroup(packages []Package, opts Options) (dependents.Group, map[string]candidateDetail, int) {
+	group := dependents.Group{
+		Upstream: dependents.PackageRef{Name: opts.Package, Ecosystem: opts.Ecosystem},
+	}
+	details := make(map[string]candidateDetail, len(packages))
+	dropped := 0
+	for _, pkg := range packages {
+		repository := firstNonEmpty(pkg.RepoMetadata.HTMLURL, pkg.RepositoryURL)
+		if repository == "" {
+			logf(opts, "drop %s: no repository_url", pkg.Name)
+			dropped++
+			continue
+		}
+		if pkg.Status == "removed" || pkg.Status == "deprecated" {
+			logf(opts, "drop %s: %s", pkg.Name, pkg.Status)
+			dropped++
+			continue
+		}
+
+		detail := details[repository]
+		if detail.name == "" {
+			detail.name = pkg.Name
+		}
+		detail.dependentPackages = max(detail.dependentPackages, pkg.DependentPackagesCount)
+		details[repository] = detail
+
+		group.Dependents = append(group.Dependents, dependents.Dependent{
+			Package: dependents.Package{
+				Name:           pkg.Name,
+				Ecosystem:      pkg.Ecosystem,
+				LatestVersion:  pkg.LatestRelease,
+				Downloads:      pkg.Downloads,
+				DependentRepos: pkg.DependentReposCount,
+			},
+			Repository: repository,
+			RepositoryMetadata: dependents.RepositoryMetadata{
+				Fork:            pkg.RepoMetadata.Fork,
+				Archived:        pkg.RepoMetadata.Archived,
+				MirrorURL:       pkg.RepoMetadata.MirrorURL,
+				SourceName:      pkg.RepoMetadata.SourceName,
+				PushedAt:        pkg.RepoMetadata.PushedAt,
+				StargazersCount: pkg.RepoMetadata.StargazersCount,
+				Language:        pkg.RepoMetadata.Language,
+			},
+		})
+	}
+	return group, details, dropped
+}
+
+func candidateName(candidate dependents.Candidate) string {
+	if len(candidate.Packages) > 0 && candidate.Packages[0].Name != "" {
+		return candidate.Packages[0].Name
+	}
+	return candidate.Repository
+}
+
+func rejectionMessage(rejection dependents.Rejection) string {
+	if rejection.Reason == dependents.ReasonStale && !rejection.Candidate.RepositoryMetadata.PushedAt.IsZero() {
+		return fmt.Sprintf("stale (last push %s)", rejection.Candidate.RepositoryMetadata.PushedAt.Format("2006-01-02"))
+	}
+	if rejection.Reason == dependents.ReasonMirror && rejection.Candidate.RepositoryMetadata.SourceName != "" {
+		return "mirror of " + rejection.Candidate.RepositoryMetadata.SourceName
+	}
+	return rejection.Reason
 }
 
 func (o Options) upstreamRepo() string {
