@@ -16,7 +16,7 @@ require (
 	github.com/bazelbuild/buildtools v0.0.0-20260716142318-04cf7de1434f // indirect
 	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
 	github.com/ecosyste-ms/ecosystems-go v0.4.0 // indirect
-	github.com/git-pkgs/clone v0.2.1 // indirect
+	github.com/git-pkgs/clone v0.5.0 // indirect
 	github.com/git-pkgs/enrichment v0.6.5 // indirect
 	github.com/git-pkgs/licensecheck v0.4.1 // indirect
 	github.com/git-pkgs/magic v0.2.0 // indirect
