@@ -2,6 +2,8 @@ module github.com/git-pkgs/downstream
 
 go 1.26.4
 
+toolchain go1.26.6
+
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/git-pkgs/brief v0.10.0
