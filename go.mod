@@ -8,7 +8,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/git-pkgs/brief v0.11.0
 	github.com/git-pkgs/dependents v0.1.0
-	github.com/git-pkgs/managers v0.10.1
+	github.com/git-pkgs/managers v0.11.0
 	github.com/git-pkgs/manifests v0.10.0
 	github.com/spf13/cobra v1.10.2
 )
