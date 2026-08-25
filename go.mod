@@ -6,7 +6,7 @@ toolchain go1.26.6
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/git-pkgs/brief v0.10.0
+	github.com/git-pkgs/brief v0.11.0
 	github.com/git-pkgs/dependents v0.1.0
 	github.com/git-pkgs/managers v0.10.1
 	github.com/git-pkgs/manifests v0.10.0
@@ -19,13 +19,13 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
 	github.com/ecosyste-ms/ecosystems-go v0.4.0 // indirect
 	github.com/git-pkgs/clone v0.5.0 // indirect
-	github.com/git-pkgs/enrichment v0.6.5 // indirect
+	github.com/git-pkgs/enrichment v0.7.0 // indirect
 	github.com/git-pkgs/licensecheck v0.4.1 // indirect
 	github.com/git-pkgs/magic v0.2.0 // indirect
 	github.com/git-pkgs/packageurl-go v0.3.1 // indirect
 	github.com/git-pkgs/pom v0.1.7 // indirect
 	github.com/git-pkgs/purl v0.1.17 // indirect
-	github.com/git-pkgs/registries v0.7.0 // indirect
+	github.com/git-pkgs/registries v0.8.0 // indirect
 	github.com/git-pkgs/spdx v0.3.1 // indirect
 	github.com/git-pkgs/vers v0.3.1 // indirect
 	github.com/git-pkgs/vulns v0.2.1 // indirect
