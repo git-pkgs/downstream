@@ -1,6 +1,6 @@
 module github.com/git-pkgs/downstream
 
-go 1.26
+go 1.26.0
 
 toolchain go1.26.7
 
@@ -9,7 +9,7 @@ require (
 	github.com/git-pkgs/brief v0.12.1
 	github.com/git-pkgs/dependents v0.1.0
 	github.com/git-pkgs/managers v0.11.0
-	github.com/git-pkgs/manifests v0.10.1
+	github.com/git-pkgs/manifests v0.12.0
 	github.com/spf13/cobra v1.10.2
 )
 
@@ -24,17 +24,17 @@ require (
 	github.com/git-pkgs/magic v0.2.0 // indirect
 	github.com/git-pkgs/packageurl-go v0.3.1 // indirect
 	github.com/git-pkgs/pom v0.1.7 // indirect
-	github.com/git-pkgs/purl v0.1.17 // indirect
+	github.com/git-pkgs/purl v0.1.20 // indirect
 	github.com/git-pkgs/registries v0.8.0 // indirect
 	github.com/git-pkgs/spdx v0.3.1 // indirect
-	github.com/git-pkgs/vers v0.3.1 // indirect
+	github.com/git-pkgs/vers v0.7.0 // indirect
 	github.com/git-pkgs/vulns v0.2.1 // indirect
 	github.com/github/go-spdx/v2 v2.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/oapi-codegen/nullable v1.2.0 // indirect
 	github.com/oapi-codegen/runtime v1.6.0 // indirect
-	github.com/package-url/packageurl-go v0.1.6 // indirect
+	github.com/package-url/packageurl-go v0.1.7 // indirect
 	github.com/pandatix/go-cvss v0.6.2 // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
