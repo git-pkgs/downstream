@@ -178,4 +178,4 @@ Tests use fixtures under `internal/run/testdata` so the suite is hermetic.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE).
