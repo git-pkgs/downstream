@@ -9,14 +9,14 @@ require (
 	github.com/git-pkgs/brief v0.13.0
 	github.com/git-pkgs/dependents v0.2.0
 	github.com/git-pkgs/managers v0.12.0
-	github.com/git-pkgs/manifests v0.12.2
+	github.com/git-pkgs/manifests v0.12.3
 	github.com/spf13/cobra v1.10.2
 )
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/bazelbuild/buildtools v0.0.0-20260716142318-04cf7de1434f // indirect
-	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
+	github.com/bmatcuk/doublestar/v4 v4.10.2 // indirect
 	github.com/ecosyste-ms/ecosystems-go v0.4.0 // indirect
 	github.com/git-pkgs/clone v0.7.2 // indirect
 	github.com/git-pkgs/enrichment v0.7.1 // indirect
