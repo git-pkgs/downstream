@@ -1,34 +1,37 @@
 module github.com/git-pkgs/downstream
 
-go 1.26.0
+go 1.26.1
 
 toolchain go1.26.7
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/git-pkgs/brief v0.13.0
+	github.com/git-pkgs/brief v0.14.0
 	github.com/git-pkgs/dependents v0.2.0
 	github.com/git-pkgs/managers v0.12.0
-	github.com/git-pkgs/manifests v0.12.2
+	github.com/git-pkgs/manifests v0.12.3
 	github.com/spf13/cobra v1.10.2
 )
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/bazelbuild/buildtools v0.0.0-20260716142318-04cf7de1434f // indirect
-	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
+	github.com/bmatcuk/doublestar/v4 v4.10.2 // indirect
 	github.com/ecosyste-ms/ecosystems-go v0.4.0 // indirect
-	github.com/git-pkgs/clone v0.7.2 // indirect
+	github.com/git-pkgs/citation v0.1.0 // indirect
+	github.com/git-pkgs/clone v0.7.5 // indirect
+	github.com/git-pkgs/codemeta v0.3.0 // indirect
 	github.com/git-pkgs/enrichment v0.7.1 // indirect
 	github.com/git-pkgs/licensecheck v0.4.1 // indirect
-	github.com/git-pkgs/magic v0.3.1 // indirect
+	github.com/git-pkgs/magic v0.5.0 // indirect
 	github.com/git-pkgs/packageurl-go v0.3.1 // indirect
-	github.com/git-pkgs/pom v0.1.7 // indirect
-	github.com/git-pkgs/purl v0.1.20 // indirect
-	github.com/git-pkgs/registries v0.9.1 // indirect
-	github.com/git-pkgs/spdx v0.3.1 // indirect
-	github.com/git-pkgs/vers v0.7.0 // indirect
-	github.com/git-pkgs/vulns v0.2.3 // indirect
+	github.com/git-pkgs/pom v0.1.8 // indirect
+	github.com/git-pkgs/purl v0.1.21 // indirect
+	github.com/git-pkgs/registries v0.9.3 // indirect
+	github.com/git-pkgs/roles v0.1.3 // indirect
+	github.com/git-pkgs/spdx v0.3.3 // indirect
+	github.com/git-pkgs/vers v0.7.2 // indirect
+	github.com/git-pkgs/vulns v0.2.4 // indirect
 	github.com/github/go-spdx/v2 v2.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
@@ -36,8 +39,6 @@ require (
 	github.com/oapi-codegen/runtime v1.6.0 // indirect
 	github.com/package-url/packageurl-go v0.1.7 // indirect
 	github.com/pandatix/go-cvss v0.6.4 // indirect
-	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
