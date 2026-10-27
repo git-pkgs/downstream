@@ -6,7 +6,7 @@ toolchain go1.26.7
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/git-pkgs/brief v0.14.1
+	github.com/git-pkgs/brief v0.14.2
 	github.com/git-pkgs/dependents v0.2.0
 	github.com/git-pkgs/managers v0.12.0
 	github.com/git-pkgs/manifests v0.12.3
