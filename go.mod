@@ -9,14 +9,14 @@ require (
 	github.com/git-pkgs/brief v0.14.2
 	github.com/git-pkgs/dependents v0.2.0
 	github.com/git-pkgs/managers v0.12.0
-	github.com/git-pkgs/manifests v0.12.3
+	github.com/git-pkgs/manifests v0.12.4
 	github.com/spf13/cobra v1.10.2
 )
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/bazelbuild/buildtools v0.0.0-20260716142318-04cf7de1434f // indirect
-	github.com/bmatcuk/doublestar/v4 v4.10.2 // indirect
+	github.com/bmatcuk/doublestar/v4 v4.10.3 // indirect
 	github.com/ecosyste-ms/ecosystems-go v0.5.0 // indirect
 	github.com/git-pkgs/bibtex v0.1.0 // indirect
 	github.com/git-pkgs/citation v0.1.0 // indirect
@@ -26,7 +26,7 @@ require (
 	github.com/git-pkgs/licensecheck v0.4.1 // indirect
 	github.com/git-pkgs/magic v0.5.0 // indirect
 	github.com/git-pkgs/pom v0.1.8 // indirect
-	github.com/git-pkgs/purl v0.1.21 // indirect
+	github.com/git-pkgs/purl v0.1.22 // indirect
 	github.com/git-pkgs/registries v0.9.3 // indirect
 	github.com/git-pkgs/roles v0.1.3 // indirect
 	github.com/git-pkgs/spdx v0.3.3 // indirect
