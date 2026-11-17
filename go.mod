@@ -1,22 +1,20 @@
 module github.com/git-pkgs/downstream
 
-go 1.26.1
-
-toolchain go1.26.7
+go 1.27
 
 require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/git-pkgs/brief v0.15.0
 	github.com/git-pkgs/dependents v0.2.0
 	github.com/git-pkgs/managers v0.12.0
-	github.com/git-pkgs/manifests v0.12.4
+	github.com/git-pkgs/manifests v0.14.0
 	github.com/spf13/cobra v1.10.2
 )
 
 require (
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
 	github.com/bazelbuild/buildtools v0.0.0-20260716142318-04cf7de1434f // indirect
-	github.com/bmatcuk/doublestar/v4 v4.10.3 // indirect
+	github.com/bmatcuk/doublestar/v4 v4.10.4 // indirect
 	github.com/ecosyste-ms/ecosystems-go v0.5.0 // indirect
 	github.com/git-pkgs/bibtex v0.1.0 // indirect
 	github.com/git-pkgs/citation v0.1.0 // indirect
